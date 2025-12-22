@@ -1,11 +1,22 @@
 """
-Script to convert Aloha hdf5 data to the LeRobot dataset v2.0 format.
+Script to convert Aloha hdf5 data to the LeRobot dataset v2.1 format.
 
-Example usage: uv run examples/imeta_y1/convert_hdf5_data_to_lerobot.py --raw-dir /path/to/raw/data --repo-id <org>/<dataset-name>
+Example usage: 
+    ## single arm
+    uv run examples/imeta_y1/convert_h5_to_lerobot.py \
+        ---config.h5-raw-dir /path/to/raw/data \
+        --config.repo-id openpi/<dataset-name>
+
+    ## dual arm
+    uv run examples/imeta_y1/convert_h5_to_lerobot.py \
+        --config.h5-raw-dir /path/to/raw/data \
+        --config.repo-id openpi/<dataset-name> \
+        --config.no-single-arm
 """
 
-import dataclasses
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import List
 import shutil
 from typing import Literal
 
@@ -19,51 +30,61 @@ import tyro
 import cv2
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclass(frozen=True)
 class DatasetConfig:
+    h5_raw_dir: Path
+    repo_id: str
+    # True: single arm, False: dual arm
+    single_arm: bool = True
+    # fix camera names use your camera config
+    cam_names: List[str] = field(default_factory=lambda: ["cam_front", "cam_right_wrist", "cam_left_wrist"])
+    # cam_names: List[str] = field(default_factory=lambda: ["cam_high", "cam_right_wrist"])
+    has_velocity: bool = False
+    has_effort: bool = False
+    # if not None, use this task
+    task : str = None
+
     use_videos: bool = True
     fps: int = 30
+    robot_type: str = "IMETA_Y1"
+    push_to_hub: bool = False
     tolerance_s: float = 0.0001
     image_writer_processes: int = 10
     image_writer_threads: int = 5
     video_backend: str | None = None
 
 
-DEFAULT_DATASET_CONFIG = DatasetConfig()
+# DEFAULT_DATASET_CONFIG = DatasetConfig()
 
 
 def create_empty_dataset(
-    repo_id: str,
-    robot_type: str,
-    mode: Literal["video", "image"] = "video",
-    *,
-    has_velocity: bool = False,
-    has_effort: bool = False,
-    dataset_config: DatasetConfig = DEFAULT_DATASET_CONFIG,
+    dataset_config: DatasetConfig,
 ) -> LeRobotDataset:
-    motors = [
-        "right_joint1",
-        "right_joint2",
-        "right_joint3",
-        "right_joint4",
-        "right_joint5",
-        "right_joint6",
-        "right_gripper",
-        "left_joint1",
-        "left_joint2",
-        "left_joint3",
-        "left_joint4",
-        "left_joint5",
-        "left_joint6",
-        "left_gripper",
-    ]
-    cameras = [
-        "cam_front",
-        # "cam_high",
-        # "cam_low",
-        "cam_left_wrist",
-        "cam_right_wrist",
-    ]
+    if dataset_config.single_arm:
+      motors = ["left_joint1", 
+                "left_joint2", 
+                "left_joint3", 
+                "left_joint4", 
+                "left_joint5", 
+                "left_joint6", 
+                "left_gripper"]
+    else:
+      motors = ["left_joint1", 
+                "left_joint2", 
+                "left_joint3", 
+                "left_joint4", 
+                "left_joint5", 
+                "left_joint6", 
+                "left_gripper",
+                "right_joint1", 
+                "right_joint2", 
+                "right_joint3", 
+                "right_joint4", 
+                "right_joint5", 
+                "right_joint6", 
+                "right_gripper"]
+    
+    cameras = dataset_config.cam_names
 
     features = {
         "observation.state": {
@@ -82,7 +103,7 @@ def create_empty_dataset(
         },
     }
 
-    if has_velocity:
+    if dataset_config.has_velocity:
         features["observation.velocity"] = {
             "dtype": "float32",
             "shape": (len(motors),),
@@ -91,7 +112,7 @@ def create_empty_dataset(
             ],
         }
 
-    if has_effort:
+    if dataset_config.has_effort:
         features["observation.effort"] = {
             "dtype": "float32",
             "shape": (len(motors),),
@@ -102,7 +123,7 @@ def create_empty_dataset(
 
     for cam in cameras:
         features[f"observation.images.{cam}"] = {
-            "dtype": mode,
+            "dtype": "video" if dataset_config.use_videos else "image",
             "shape": (3, 480, 640),
             "names": [
                 "channels",
@@ -111,13 +132,10 @@ def create_empty_dataset(
             ],
         }
 
-    if Path(HF_LEROBOT_HOME / repo_id).exists():
-        shutil.rmtree(HF_LEROBOT_HOME / repo_id)
-
     return LeRobotDataset.create(
-        repo_id=repo_id,
+        repo_id=dataset_config.repo_id,
         fps=dataset_config.fps,
-        robot_type=robot_type,
+        robot_type=dataset_config.robot_type,
         features=features,
         use_videos=dataset_config.use_videos,
         tolerance_s=dataset_config.tolerance_s,
@@ -125,16 +143,6 @@ def create_empty_dataset(
         image_writer_threads=dataset_config.image_writer_threads,
         video_backend=dataset_config.video_backend,
     )
-
-
-def has_velocity(hdf5_files: list[Path]) -> bool:
-    with h5py.File(hdf5_files[0], "r") as ep:
-        return "/observation/velocity" in ep
-
-
-def has_effort(hdf5_files: list[Path]) -> bool:
-    with h5py.File(hdf5_files[0], "r") as ep:
-        return "/observation/effort" in ep
 
 
 def load_raw_images_per_camera(ep: h5py.File, cameras: list[str]) -> dict[str, np.ndarray]:
@@ -156,6 +164,7 @@ def load_raw_images_per_camera(ep: h5py.File, cameras: list[str]) -> dict[str, n
 
 def load_raw_episode_data(
     ep_path: Path,
+    cameras: list[str]
 ) -> tuple[dict[str, np.ndarray], torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
     with h5py.File(ep_path, "r") as ep:
         state = torch.from_numpy(ep["/observation/state"][:])
@@ -169,16 +178,7 @@ def load_raw_episode_data(
         if "/observation/effort" in ep:
             effort = torch.from_numpy(ep["/observation/effort"][:])
 
-        imgs_per_cam = load_raw_images_per_camera(
-            ep,
-            [
-                "cam_front",
-                # "cam_high",
-                # "cam_low",
-                "cam_left_wrist",
-                "cam_right_wrist",
-            ],
-        )
+        imgs_per_cam = load_raw_images_per_camera(ep, cameras)
 
         task_description = None
         if "task" in ep.attrs:
@@ -188,18 +188,16 @@ def load_raw_episode_data(
 
 
 def populate_dataset(
+    dataset_config: DatasetConfig,
     dataset: LeRobotDataset,
     hdf5_files: list[Path],
-    task: str,
-    episodes: list[int] | None = None,
 ) -> LeRobotDataset:
-    if episodes is None:
-        episodes = range(len(hdf5_files))
+    episodes = range(len(hdf5_files))
 
     for ep_idx in tqdm.tqdm(episodes):
         ep_path = hdf5_files[ep_idx]
 
-        imgs_per_cam, state, action, velocity, effort, task_description = load_raw_episode_data(ep_path)
+        imgs_per_cam, state, action, velocity, effort, task_description = load_raw_episode_data(ep_path, dataset_config.cam_names)
         num_frames = state.shape[0]
 
         for i in range(num_frames):
@@ -211,12 +209,15 @@ def populate_dataset(
             for camera, img_array in imgs_per_cam.items():
                 frame[f"observation.images.{camera}"] = img_array[i]
 
-            if velocity is not None:
+            if velocity is not None and dataset_config.has_velocity:
                 frame["observation.velocity"] = velocity[i]
-            if effort is not None:
+            if effort is not None and dataset_config.has_effort:
                 frame["observation.effort"] = effort[i]
 
-            frame["task"] = task_description
+            if dataset_config.task:
+                frame["task"] = dataset_config.task
+            else:
+                frame["task"] = task_description
             dataset.add_frame(frame)
 
         dataset.save_episode()
@@ -225,41 +226,27 @@ def populate_dataset(
 
 
 def port_aloha(
-    raw_dir: Path,
-    repo_id: str,
-    raw_repo_id: str | None = None,
-    task: str = "DEBUG",
-    *,
-    episodes: list[int] | None = None,
-    push_to_hub: bool = False,
-    is_mobile: bool = False,
-    mode: Literal["video", "image"] = "image",
-    dataset_config: DatasetConfig = DEFAULT_DATASET_CONFIG,
+    config: DatasetConfig,
 ):
-    if (HF_LEROBOT_HOME / repo_id).exists():
-        shutil.rmtree(HF_LEROBOT_HOME / repo_id)
+    if (HF_LEROBOT_HOME / config.repo_id).exists():
+        shutil.rmtree(HF_LEROBOT_HOME / config.repo_id)
 
-    if not raw_dir.exists():
-        raise ValueError("raw_dir does not exist")
+    raw_data_dir  = config.h5_raw_dir.resolve()
+    if not raw_data_dir.exists():
+        raise ValueError("h5_raw_dir does not exist")
 
-    hdf5_files = sorted(raw_dir.glob("episode_*.hdf5"))
+    hdf5_files = sorted(raw_data_dir.glob("episode_*.hdf5"))
 
     dataset = create_empty_dataset(
-        repo_id,
-        robot_type="mobile_aloha" if is_mobile else "aloha",
-        mode=mode,
-        has_effort=has_effort(hdf5_files),
-        has_velocity=has_velocity(hdf5_files),
-        dataset_config=dataset_config,
+        dataset_config=config,
     )
     dataset = populate_dataset(
+        config,
         dataset,
         hdf5_files,
-        task=task,
-        episodes=episodes,
     )
 
-    if push_to_hub:
+    if config.push_to_hub:
         dataset.push_to_hub()
 
 

@@ -4,6 +4,7 @@ import logging
 import time
 import tyro
 import rospy
+import numpy as np
 from pprint import pformat
 from dataclasses import asdict
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
@@ -47,10 +48,11 @@ def eval_policy(
     env = RealRobotEnv()
 
     # language
-    lerobot_task = step["task"]
+    # lerobot_task = step["task"]
+    lerobot_task = "pick up the potato chips"
     print("lerobot_task: ", lerobot_task)
 
-    language = "Folded orange towel"    
+    # language = "Folded orange towel"    
         
     input("Press key [enter] control robot to init position: ")
     # robot go to dataset init position
@@ -65,21 +67,41 @@ def eval_policy(
         observation = env.get_observation()
         # wait input data
         if observation is None:
-            time.sleep(1/15)
+            time.sleep(1/30)
             continue
 
-        observation["prompt"] = language
+        observation["prompt"] = lerobot_task
 
         start_time = time.time()  # 记录循环开始时间
         action_chunk = policy.infer(observation)["actions"]
         print(f"policy time: {(time.time() - start_time) * 1000} ms")
-        print("action_chunk shape: ", action_chunk.shape)
+        # print("action_chunk shape: ", action_chunk.shape)
 
-        action_chunk = action_chunk[:30]  # 取前30个chunk
-        print("action_chunk shape: ", action_chunk.shape)
+        action_chunk = action_chunk[:50]  # 取前30个chunk
+        # print("action_chunk shape: ", action_chunk.shape)
+        # 使用numpy的插值
+        # interpolated_actions = np.zeros((200, 14))
+        # for dim in range(14):
+        #     # 对每个维度进行线性插值
+        #     interpolated_actions[:, dim] = np.interp(
+        #         np.linspace(0, 29, 200),  # 目标时间点
+        #         np.arange(30),            # 原始时间点  
+        #         action_chunk[:, dim]      # 原始数据
+        #     )
+
+        # print("插值后shape: ", interpolated_actions.shape)
+
+        # 按照400Hz下发
+        # for action in interpolated_actions:
+        #     env.step(action[:14])
+        #     time.sleep(1/200)
+            # print("400 action: ", action)
+
+        # input("Press key [enter] to continue model inference: ")
         for action in action_chunk:
-            env.step(action[:14])
-            time.sleep(1/15)
+            env.step(action[:7])
+            # print("30 shape action : ", action[:14])
+            time.sleep(1/30)
 def main(args: Args) -> None:
     logging.info(pformat(asdict(args)))
 

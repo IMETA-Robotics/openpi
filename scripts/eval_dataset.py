@@ -4,6 +4,8 @@ import logging
 import time
 import tyro
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # 在导入 pyplot 之前设置
 import matplotlib.pyplot as plt
 from pprint import pformat
 from dataclasses import asdict
@@ -28,6 +30,9 @@ class Args:
     # Specifies how to load the policy. If not provided, the default policy for the environment will be used.
     policy: Checkpoint | None
 
+    # evaluate a specific episode from the dataset. default 0
+    episode_idx: int = 0
+
     # If provided, will be used in case the "prompt" key is not present in the data, or if the model doesn't have a default
     # prompt.
     default_prompt: str | None = None
@@ -38,11 +43,12 @@ class Args:
 def eval_policy(
     policy,
     dataset: LeRobotDataset,
+    episode_idx: int,
 ):
     # init pose
-    start_idx = dataset.episode_data_index["from"][9].item()
+    start_idx = dataset.episode_data_index["from"][episode_idx].item()
     step = dataset[start_idx]
-    end_idx = dataset.episode_data_index["to"][9].item()
+    end_idx = dataset.episode_data_index["to"][episode_idx].item()
 
     ground_truth_actions = []
     predicted_actions = []
@@ -52,7 +58,7 @@ def eval_policy(
     step_idx = start_idx
     while step_idx < end_idx:
         step = dataset[step_idx]
-        # state 
+        # state
         state = step["observation.state"]
 
         # images
@@ -78,8 +84,9 @@ def eval_policy(
         print(f"policy time: {(time.time() - start_time) * 1000} ms")
 
         action_chunk = action_chunk[:30]  # 取前30个chunk
-        print("action_chunk shape: ", action_chunk.shape)
         for action in action_chunk:
+            if step_idx >= end_idx:
+                break
             ground_truth_actions.append(dataset[step_idx]["action"].numpy())
             predicted_actions.append(action[:30])
             
@@ -91,6 +98,7 @@ def eval_policy(
 
     # Get the number of timesteps and action dimensions
     _, n_dims = ground_truth_actions.shape
+    print("n_dims: ", n_dims)
 
     # Create a figure with subplots for each action dimension
     fig, axes = plt.subplots(n_dims, 1, figsize=(12, 4*n_dims), sharex=True)
@@ -112,7 +120,7 @@ def eval_policy(
     # plt.show()
 
     time.sleep(1)
-    plt.savefig('pi_action_20000_step.png')
+    plt.savefig('eval_dataset.png')
 
 def main(args: Args) -> None:
     logging.info(pformat(asdict(args)))
@@ -130,7 +138,7 @@ def main(args: Args) -> None:
     # load dataset
     dataset = LeRobotDataset(repo_id = train_config.data.repo_id)
 
-    eval_policy(policy, dataset)
+    eval_policy(policy, dataset, args.episode_idx)
 
     logging.info("End of eval")
 

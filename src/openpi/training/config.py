@@ -549,19 +549,87 @@ class TrainConfig:
 
 # Use `get_config` if you need to get a config by name in your code.
 _CONFIGS = [
-    ### Fine-tuning IMETA-Y1 dual arm configs.
+    ### Fine-tuning IMETA-Y1 single arm configs.
     # full fine tuning pi0_base
     TrainConfig(
-        name="pi0_base_full_fine_tuning",
+        name="pi0_base_full_single_arm",
         model=pi0_config.Pi0Config(),
         data=LeRobotAlohaDataConfig(
-            repo_id="folded_orange_towel",  # your datasets repo_id
+            repo_id="openpi/pick_two_water_bottle_20251215",  # your datasets repo_id
             repack_transforms=_transforms.Group(
                 inputs=[
                     _transforms.RepackTransform(
                         {
                             "images": {
-                                "cam_front": "observation.images.cam_front",
+                                "cam_high": "observation.images.cam_high",
+                                # "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                prompt_from_task=True,  # Set to True for prompt by task_name
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=30000,
+        save_interval = 5000,
+        keep_period = 10000,
+        batch_size=32,  # the total batch_size not pre_gpu batch_size
+        fsdp_devices=1,
+    ),
+    # full fine tuning pi05_base
+    TrainConfig(
+        name="pi05_base_full_single_arm",
+        model=pi0_config.Pi0Config(pi05=True),
+        data=LeRobotAlohaDataConfig(
+            repo_id="openpi/pick_two_water_bottle_20251215",   # your datasets repo_id
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                # "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                prompt_from_task=True,  # Set to True for prompt by task_name
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        num_train_steps=30000,
+        save_interval = 5000,
+        keep_period = 10000,
+        batch_size=32,  # the total batch_size not pre_gpu batch_size
+        fsdp_devices=1,
+    ),
+
+    ### Fine-tuning IMETA-Y1 dual arm configs.
+    # full fine tuning pi0_base
+    TrainConfig(
+        name="pi0_base_full_dual_arm",
+        model=pi0_config.Pi0Config(),
+        data=LeRobotAlohaDataConfig(
+            repo_id="openpi/folded_orange_towel_1122",  # your datasets repo_id
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
                                 "cam_left_wrist": "observation.images.cam_left_wrist",
                                 "cam_right_wrist": "observation.images.cam_right_wrist",
                             },
@@ -580,15 +648,15 @@ _CONFIGS = [
         num_train_steps=30000,
         save_interval = 5000,
         keep_period = 10000,
-        batch_size=64,  # the total batch_size not pre_gpu batch_size
-        fsdp_devices=4,
+        batch_size=32,  # the total batch_size not pre_gpu batch_size
+        fsdp_devices=1,
     ),
     # full fine tuning pi05_base
     TrainConfig(
-        name="pi05_base_full_fine_tuning",
+        name="pi05_base_full_dual_arm",
         model=pi0_config.Pi0Config(pi05=True),
         data=LeRobotAlohaDataConfig(
-            repo_id="your_repo_id",   # your datasets repo_id
+            repo_id="openpi/pick_up_oranges_and_place_to_plates",   # your datasets repo_id
             repack_transforms=_transforms.Group(
                 inputs=[
                     _transforms.RepackTransform(
@@ -600,7 +668,7 @@ _CONFIGS = [
                             },
                             "state": "observation.state",
                             "actions": "action",
-                            "prompt": "task",
+                            "prompt": "prompt",
                         }
                     )
                 ]
@@ -611,11 +679,12 @@ _CONFIGS = [
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
         num_train_steps=30000,
-        save_interval = 1000,
+        save_interval = 5000,
         keep_period = 10000,
-        batch_size=64,  # the total batch_size not pre_gpu batch_size
-        fsdp_devices=2,
+        batch_size=32,  # the total batch_size not pre_gpu batch_size
+        fsdp_devices=1,
     ),
+
     #
     # RoboArena configs.
     #

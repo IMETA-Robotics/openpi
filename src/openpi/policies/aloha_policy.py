@@ -37,7 +37,7 @@ class AlohaInputs(transforms.DataTransformFn):
 
     # The expected cameras names. All input cameras must be in this set. Missing cameras will be
     # replaced with black images and the corresponding `image_mask` will be set to False.
-    EXPECTED_CAMERAS: ClassVar[tuple[str, ...]] = ("cam_high", "cam_low", "cam_left_wrist", "cam_right_wrist", "cam_front")
+    EXPECTED_CAMERAS: ClassVar[tuple[str, ...]] = ("cam_high", "cam_low", "cam_left_wrist", "cam_right_wrist")
 
     def __call__(self, data: dict) -> dict:
         data = _decode_aloha(data, adapt_to_pi=self.adapt_to_pi)
@@ -47,7 +47,7 @@ class AlohaInputs(transforms.DataTransformFn):
             raise ValueError(f"Expected images to contain {self.EXPECTED_CAMERAS}, got {tuple(in_images)}")
 
         # Assume that base image always exists.
-        base_image = in_images["cam_front"]
+        base_image = in_images["cam_high"]
 
         images = {
             "base_0_rgb": base_image,
