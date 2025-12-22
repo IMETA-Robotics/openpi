@@ -3,11 +3,11 @@ import dataclasses
 import logging
 import time
 import tyro
-import numpy as np
-import matplotlib.pyplot as plt
+import rclpy
 from pprint import pformat
 from dataclasses import asdict
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+from real_robot_env import RealRobotEnv
 from openpi.policies import policy_config as _policy_config
 from openpi.training import config as _config
 from openpi.policies import policy as _policy
@@ -42,77 +42,43 @@ def eval_policy(
     # init pose
     start_idx = dataset.episode_data_index["from"][9].item()
     step = dataset[start_idx]
-    end_idx = dataset.episode_data_index["to"][9].item()
 
-    ground_truth_actions = []
-    predicted_actions = []
+    # real robot environment
+    env = RealRobotEnv()
+
+    # language
+    lerobot_task = step["task"]
+    print("lerobot_task: ", lerobot_task)
         
-    input("Press [Enter] key to start eval dataset):")
+    input("Press key [enter] control robot to init position: ")
+    # robot go to dataset init position
+    print("wait robot to init joint position")
+    init_state = step["observation.state"]
+    env.step(init_state)
+    time.sleep(3)
 
-    step_idx = start_idx
-    while step_idx < end_idx:
-        step = dataset[step_idx]
-        # state 
-        state = step["observation.state"]
+    input("Press key [enter] to start model inference: ")
 
-        # images
-        img_front = step[f"observation.images.cam_front"]
-        img_left = step[f"observation.images.cam_left_wrist"]
-        img_right = step[f"observation.images.cam_right_wrist"]
+    while rclpy.ok():
+        rclpy.spin_once(env, timeout_sec=0.01)
 
-        # language
-        task = step["task"]
+        observation = env.get_observation()
+        # wait input data
+        if observation is None:
+            time.sleep(1/30)
+            continue
 
-        observation = {
-            "state": state,
-            "images": {
-                "cam_front": img_front,
-                "cam_left_wrist": img_left,
-                "cam_right_wrist": img_right,
-            },
-            "prompt": task,
-        }
+        observation["prompt"] = lerobot_task
 
         start_time = time.time()  # 记录循环开始时间
         action_chunk = policy.infer(observation)["actions"]
-        print(f"policy time: {(time.time() - start_time) * 1000} ms")
+        print(f"model inference time: {(time.time() - start_time) * 1000} ms")
 
         action_chunk = action_chunk[:30]  # 取前30个chunk
         print("action_chunk shape: ", action_chunk.shape)
         for action in action_chunk:
-            ground_truth_actions.append(dataset[step_idx]["action"].numpy())
-            predicted_actions.append(action[:30])
-            
-            step_idx += 1
+            env.step(action[:30])
             time.sleep(1/30)
-
-    ground_truth_actions = np.array(ground_truth_actions)
-    predicted_actions = np.array(predicted_actions)
-
-    # Get the number of timesteps and action dimensions
-    _, n_dims = ground_truth_actions.shape
-
-    # Create a figure with subplots for each action dimension
-    fig, axes = plt.subplots(n_dims, 1, figsize=(12, 4*n_dims), sharex=True)
-    fig.suptitle('Ground Truth vs Predicted Actions')
-
-    # Plot each dimension
-    for i in range(n_dims):
-        ax = axes[i] if n_dims > 1 else axes
-
-        ax.plot(ground_truth_actions[:, i], label='Ground Truth', color='blue')
-        ax.plot(predicted_actions[:, i], label='Predicted', color='red', linestyle='--')
-        ax.set_ylabel(f'Dim {i+1}')
-        ax.legend()
-
-    # Set common x-label
-    axes[-1].set_xlabel('Timestep')
-
-    plt.tight_layout()
-    # plt.show()
-
-    time.sleep(1)
-    plt.savefig('pi_action_20000_step.png')
 
 def main(args: Args) -> None:
     logging.info(pformat(asdict(args)))
@@ -131,7 +97,7 @@ def main(args: Args) -> None:
     dataset = LeRobotDataset(repo_id = train_config.data.repo_id)
 
     eval_policy(policy, dataset)
-
+    # eval_policy(policy)
     logging.info("End of eval")
 
 if __name__ == "__main__":
