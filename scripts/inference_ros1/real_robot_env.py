@@ -7,15 +7,16 @@ import numpy as np
 from typing import Union
 
 class RealRobotEnv:
-  def __init__(self):
+  def __init__(self, single_arm: bool, cam_names: list):
+    self.single_arm = single_arm
+    self.camera_names = cam_names
+
     self.bridge = CvBridge()
     self.right_puppet_arm_state = None
     self.left_puppet_arm_state = None
     self.img_dict = {}
     self.left_arm_joint_position_control_pub_ = None
     self.right_arm_joint_position_control_pub_ = None
-    self.camera_names = ["cam_right_wrist", "cam_left_wrist", "cam_front"]
-    # self.camera_names = ["cam_right_wrist", "cam_front"]
     self.init_topic()
     
   def init_topic(self):
@@ -45,8 +46,8 @@ class RealRobotEnv:
       Image, self.img_left_callback, queue_size=1, tcp_nodelay=True)
 
     # front camera rgb image
-    rospy.Subscriber("/camera_front/color/image_raw", 
-      Image, self.img_front_callback, queue_size=1, tcp_nodelay=True)
+    rospy.Subscriber("/camera_high/color/image_raw", 
+      Image, self.img_high_callback, queue_size=1, tcp_nodelay=True)
 
   def puppet_arm_right_callback(self, msg: ArmJointState):
     """right arm"""
@@ -66,28 +67,34 @@ class RealRobotEnv:
     self.img_dict["cam_left_wrist"] = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
     # print("cam_left_wrist image shape: ", self.img_dict["cam_left_wrist"].shape)
     
-  def img_front_callback(self, msg: Image):
-    """front camera rgb image"""
-    self.img_dict["cam_front"] = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
-    # print("cam_front image shape: ", self.img_dict["cam_front"].shape)
+  def img_high_callback(self, msg: Image):
+    """high camera rgb image"""
+    self.img_dict["cam_high"] = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
+    # print("cam_high image shape: ", self.img_dict["cam_high"].shape)
     
   def get_observation(self):
     observation = {}
 
     # state
-    # right arm
-    if self.right_puppet_arm_state is None:
-      print("not receive right arm data")
-      return None
-
-    # left arm
-    # if self.left_puppet_arm_state is None:
-    #   print("not receive left arm data")
-    #   return None
-
-    # observation["state"] = np.concatenate([self.right_puppet_arm_state.joint_position,
-    #                             self.left_puppet_arm_state.joint_position])
-    observation["state"] = self.right_puppet_arm_state.joint_position
+    if self.single_arm:
+      # default right arm
+      if self.right_puppet_arm_state is None:
+        print("not receive right arm data")
+        return None
+      else:
+        observation["state"] = self.right_puppet_arm_state.joint_position
+    else:
+      # dual arm
+      if self.left_puppet_arm_state is None:
+        print("not receive left arm data")
+        return None
+      
+      if self.right_puppet_arm_state is None:
+        print("not receive right arm data")
+        return None
+      
+      observation["state"] = np.concatenate([self.left_puppet_arm_state.joint_position,
+                                self.right_puppet_arm_state.joint_position])
                                            
     # image
     images = {}
@@ -102,15 +109,41 @@ class RealRobotEnv:
     return observation
     
   def step(self, action: Union[list, np.ndarray]):
-    joint_control_msg = ArmJointPositionControl()
-    joint_control_msg.header.stamp = rospy.Time.now()
-    joint_control_msg.joint_position = action[0:6]
-    joint_control_msg.gripper_stroke = action[6] - 5
-    self.right_arm_joint_position_control_pub_.publish(joint_control_msg)
+    if self.single_arm:
+      assert len(action) >= 7
+      
+      # single arm, default right arm
+      joint_control_msg = ArmJointPositionControl()
+      joint_control_msg.header.stamp = rospy.Time.now()
+      joint_control_msg.joint_position = action[0:6]
+      joint_control_msg.joint_velocity = 3
+      joint_control_msg.gripper_stroke = action[6]
+      joint_control_msg.gripper_velocity = 3
+      self.right_arm_joint_position_control_pub_.publish(joint_control_msg)
 
-    # joint_control_msg.joint_position = action[7:13]
-    # joint_control_msg.gripper_stroke = action[13] - 10
-    # self.left_arm_joint_position_control_pub_.publish(joint_control_msg)
+    else:
+      assert len(action) >= 14
+
+      # action[0:6]  -> left arm control
+      left_arm_control_msg = ArmJointPositionControl()
+      left_arm_control_msg.header.stamp = rospy.Time.now()
+      left_arm_control_msg.joint_position = action[0:6]
+      left_arm_control_msg.joint_velocity = 3
+      left_arm_control_msg.gripper_stroke = action[6]
+      left_arm_control_msg.gripper_velocity = 3
+      self.left_arm_joint_position_control_pub_.publish(left_arm_control_msg)
+
+      # action[7:13] -> right arm control
+      right_arm_control_msg = ArmJointPositionControl()
+      right_arm_control_msg.header.stamp = rospy.Time.now()
+      right_arm_control_msg.joint_position = action[7:13]
+      right_arm_control_msg.joint_velocity = 3
+      right_arm_control_msg.gripper_stroke = action[13]
+      right_arm_control_msg.gripper_velocity = 3
+      self.right_arm_joint_position_control_pub_.publish(right_arm_control_msg)
+
+    # TODO: add mobile_base control
+
 
 if __name__ == "__main__":
     env = RealRobotEnv()

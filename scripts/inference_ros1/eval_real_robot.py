@@ -44,12 +44,29 @@ def eval_policy(
     start_idx = dataset.episode_data_index["from"][9].item()
     step = dataset[start_idx]
 
+    init_state = step["observation.state"]
+    if init_state.shape[-1] >=14:
+        # dual arm
+        single_arm = False
+    elif init_state.shape[-1] >= 7:
+        # single arm
+        single_arm = True
+    else :
+        raise ValueError(f"Invalid state shape {init_state.shape[-1]}")
+    print("single_arm: ", single_arm)
+
+    cam_names = []
+    for key, _ in step.items():
+        if key.startswith("observation.images."):
+            cam_name = key[len("observation.images."):]
+            cam_names.append(cam_name)
+    print(f"cam_names: {cam_names}")
+
     # real robot environment
-    env = RealRobotEnv()
+    env = RealRobotEnv(single_arm, cam_names)
 
     # language
-    # lerobot_task = step["task"]
-    lerobot_task = "pick up the potato chips"
+    lerobot_task = step["task"]
     print("lerobot_task: ", lerobot_task)
 
     # language = "Folded orange towel"    
@@ -57,7 +74,6 @@ def eval_policy(
     input("Press key [enter] control robot to init position: ")
     # robot go to dataset init position
     print("wait robot to init joint position")
-    init_state = step["observation.state"]
     env.step(init_state)
     time.sleep(3)
 
@@ -75,41 +91,20 @@ def eval_policy(
         start_time = time.time()  # 记录循环开始时间
         action_chunk = policy.infer(observation)["actions"]
         print(f"policy time: {(time.time() - start_time) * 1000} ms")
+
+        action_chunk = action_chunk[:30]  # 取前30个chunk
         # print("action_chunk shape: ", action_chunk.shape)
-
-        action_chunk = action_chunk[:50]  # 取前30个chunk
-        # print("action_chunk shape: ", action_chunk.shape)
-        # 使用numpy的插值
-        # interpolated_actions = np.zeros((200, 14))
-        # for dim in range(14):
-        #     # 对每个维度进行线性插值
-        #     interpolated_actions[:, dim] = np.interp(
-        #         np.linspace(0, 29, 200),  # 目标时间点
-        #         np.arange(30),            # 原始时间点  
-        #         action_chunk[:, dim]      # 原始数据
-        #     )
-
-        # print("插值后shape: ", interpolated_actions.shape)
-
-        # 按照400Hz下发
-        # for action in interpolated_actions:
-        #     env.step(action[:14])
-        #     time.sleep(1/200)
-            # print("400 action: ", action)
+        # TODO: 测试插值
 
         # input("Press key [enter] to continue model inference: ")
         for action in action_chunk:
-            env.step(action[:7])
-            # print("30 shape action : ", action[:14])
+            env.step(action[:30])
             time.sleep(1/30)
 def main(args: Args) -> None:
     logging.info(pformat(asdict(args)))
 
     train_config = _config.get_config(args.policy.config)
     # load trained policy
-    # policy = _policy_config.create_trained_policy(
-    #     train_config, args.policy.dir, default_prompt=args.default_prompt
-    # )
     policy = _policy_config.create_trained_policy(
         train_config, args.policy.dir
     )

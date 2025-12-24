@@ -556,6 +556,8 @@ _CONFIGS = [
         model=pi0_config.Pi0Config(),
         data=LeRobotAlohaDataConfig(
             repo_id="openpi/pick_two_water_bottle_20251215",  # your datasets repo_id
+            use_delta_joint_actions=False,
+            adapt_to_pi=False,
             repack_transforms=_transforms.Group(
                 inputs=[
                     _transforms.RepackTransform(
@@ -589,6 +591,8 @@ _CONFIGS = [
         model=pi0_config.Pi0Config(pi05=True),
         data=LeRobotAlohaDataConfig(
             repo_id="openpi/pick_two_water_bottle_20251215",   # your datasets repo_id
+            use_delta_joint_actions=False,
+            adapt_to_pi=False,
             repack_transforms=_transforms.Group(
                 inputs=[
                     _transforms.RepackTransform(
@@ -624,6 +628,7 @@ _CONFIGS = [
         model=pi0_config.Pi0Config(),
         data=LeRobotAlohaDataConfig(
             repo_id="openpi/folded_orange_towel_1122",  # your datasets repo_id
+            use_delta_joint_actions=False,
             repack_transforms=_transforms.Group(
                 inputs=[
                     _transforms.RepackTransform(
@@ -657,6 +662,7 @@ _CONFIGS = [
         model=pi0_config.Pi0Config(pi05=True),
         data=LeRobotAlohaDataConfig(
             repo_id="openpi/pick_up_oranges_and_place_to_plates",   # your datasets repo_id
+            use_delta_joint_actions=False,
             repack_transforms=_transforms.Group(
                 inputs=[
                     _transforms.RepackTransform(

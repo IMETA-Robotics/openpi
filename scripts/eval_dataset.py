@@ -50,6 +50,13 @@ def eval_policy(
     step = dataset[start_idx]
     end_idx = dataset.episode_data_index["to"][episode_idx].item()
 
+    cam_names = []
+    for key, _ in step.items():
+        if key.startswith("observation.images."):
+            cam_name = key[len("observation.images."):]
+            cam_names.append(cam_name)
+    print(f"cam_names: {cam_names}")
+
     ground_truth_actions = []
     predicted_actions = []
         
@@ -58,25 +65,16 @@ def eval_policy(
     step_idx = start_idx
     while step_idx < end_idx:
         step = dataset[step_idx]
-        # state
-        state = step["observation.state"]
 
         # images
-        img_front = step[f"observation.images.cam_front"]
-        img_left = step[f"observation.images.cam_left_wrist"]
-        img_right = step[f"observation.images.cam_right_wrist"]
-
-        # language
-        task = step["task"]
+        images_dict = {}
+        for cam_name in cam_names:
+            images_dict[cam_name] = step[f"observation.images.{cam_name}"]
 
         observation = {
-            "state": state,
-            "images": {
-                "cam_front": img_front,
-                "cam_left_wrist": img_left,
-                "cam_right_wrist": img_right,
-            },
-            "prompt": task,
+            "state": step["observation.state"],
+            "images": images_dict,
+            "prompt": step["task"],
         }
 
         start_time = time.time()  # 记录循环开始时间

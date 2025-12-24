@@ -4,7 +4,7 @@ Script to convert Aloha hdf5 data to the LeRobot dataset v2.1 format.
 Example usage: 
     ## single arm
     uv run examples/imeta_y1/convert_h5_to_lerobot.py \
-        ---config.h5-raw-dir /path/to/raw/data \
+        --config.h5-raw-dir /path/to/raw/data \
         --config.repo-id openpi/<dataset-name>
 
     ## dual arm
@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 import shutil
-from typing import Literal
 
 import h5py
 from lerobot.common.datasets.lerobot_dataset import HF_LEROBOT_HOME
@@ -37,7 +36,7 @@ class DatasetConfig:
     # True: single arm, False: dual arm
     single_arm: bool = True
     # fix camera names use your camera config
-    cam_names: List[str] = field(default_factory=lambda: ["cam_front", "cam_right_wrist", "cam_left_wrist"])
+    cam_names: List[str] = field(default_factory=lambda: ["cam_high", "cam_right_wrist", "cam_left_wrist"])
     # cam_names: List[str] = field(default_factory=lambda: ["cam_high", "cam_right_wrist"])
     has_velocity: bool = False
     has_effort: bool = False
@@ -52,9 +51,6 @@ class DatasetConfig:
     image_writer_processes: int = 10
     image_writer_threads: int = 5
     video_backend: str | None = None
-
-
-# DEFAULT_DATASET_CONFIG = DatasetConfig()
 
 
 def create_empty_dataset(
