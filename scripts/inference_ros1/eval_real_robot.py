@@ -69,8 +69,6 @@ def eval_policy(
     lerobot_task = step["task"]
     print("lerobot_task: ", lerobot_task)
 
-    # language = "Folded orange towel"    
-        
     input("Press key [enter] control robot to init position: ")
     # robot go to dataset init position
     print("wait robot to init joint position")
@@ -100,6 +98,7 @@ def eval_policy(
         for action in action_chunk:
             env.step(action[:30])
             time.sleep(1/30)
+
 def main(args: Args) -> None:
     logging.info(pformat(asdict(args)))
 

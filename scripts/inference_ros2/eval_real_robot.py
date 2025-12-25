@@ -3,7 +3,7 @@ import dataclasses
 import logging
 import time
 import tyro
-import rclpy
+# import rclpy
 from pprint import pformat
 from dataclasses import asdict
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
@@ -43,8 +43,27 @@ def eval_policy(
     start_idx = dataset.episode_data_index["from"][9].item()
     step = dataset[start_idx]
 
+    init_state = step["observation.state"]
+    if init_state.shape[-1] >=14:
+        # dual arm
+        single_arm = False
+    elif init_state.shape[-1] >= 7:
+        # single arm
+        single_arm = True
+    else :
+        raise ValueError(f"Invalid state shape {init_state.shape[-1]}")
+    print("single_arm: ", single_arm)
+
+    cam_names = []
+    for key, _ in step.items():
+        if key.startswith("observation.images."):
+            cam_name = key[len("observation.images."):]
+            cam_names.append(cam_name)
+    print(f"cam_names: {cam_names}")
+
     # real robot environment
-    env = RealRobotEnv()
+    env = RealRobotEnv(single_arm, cam_names)
+    import rclpy
 
     # language
     lerobot_task = step["task"]
@@ -53,7 +72,6 @@ def eval_policy(
     input("Press key [enter] control robot to init position: ")
     # robot go to dataset init position
     print("wait robot to init joint position")
-    init_state = step["observation.state"]
     env.step(init_state)
     time.sleep(3)
 
@@ -75,8 +93,10 @@ def eval_policy(
         print(f"model inference time: {(time.time() - start_time) * 1000} ms")
 
         action_chunk = action_chunk[:30]  # 取前30个chunk
-        print("action_chunk shape: ", action_chunk.shape)
+        # print("action_chunk shape: ", action_chunk.shape)
+        
         for action in action_chunk:
+            rclpy.spin_once(env, timeout_sec=0.01)
             env.step(action[:30])
             time.sleep(1/30)
 
