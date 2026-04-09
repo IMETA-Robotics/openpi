@@ -49,7 +49,6 @@ class Y1Controller():
         
         eef = self.controller.GetArmEndPose()
         joint_position = self.controller.GetJointPosition()
-        # vel = self.controller.GetJointVelocity()
 
         state["end_pose"] = eef
         state["joint_position"] = joint_position[:6]
@@ -67,6 +66,9 @@ class Y1Controller():
     def set_gripper(self, gripper, velocity: int = 3):
         # gripper = gripper * 84
         self.controller.SetGripperStroke(gripper, velocity)
+
+    def set_joint_position_control(self, joint_position):
+        self.controller.SetFollowerArmJointPosition(list(joint_position))
 
 if __name__=="__main__":
     # left_controller = Y1Controller("left_arm")

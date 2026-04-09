@@ -18,6 +18,11 @@ import threading
 import time
 import numpy as np
 
+try:
+    from camera.base_camera import BaseCamera
+except ModuleNotFoundError:
+    from base_camera import BaseCamera
+
 from pyorbbecsdk import *
 from pyorbbecsdk import Config
 from pyorbbecsdk import OBError
@@ -38,13 +43,11 @@ def get_device_by_serial(context: Context, target_serial: str):
             return device
     return None
 
-class OrbbecCamera:
+class OrbbecCamera(BaseCamera):
     def __init__(self, name, visual: bool = False):
-        # super().__init__(encode_rgb=encode_rgb)
-        self.name = name
+        super().__init__(name, visual)
         self.latest_frame = None
         self.lock = threading.Lock()
-        self.visual = visual
     
     def set_up(self, camera_serial):
         # 创建上下文
@@ -102,14 +105,7 @@ class OrbbecCamera:
         image = np.resize(data, (height, width, 3))
         # print(f"image shape : {image.shape} , image dtype : {image.dtype}")
 
-        if self.visual:
-            # RGB -> BGR
-            bgr_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            cv2.imshow(f"{self.name}", bgr_image)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q') or key == 27:  # 按q或ESC退出
-                cv2.destroyAllWindows()
-                raise KeyboardInterrupt("User interrupted preview")
+        self.show_rgb_image(image)
         
         return image
 
@@ -119,8 +115,8 @@ class OrbbecCamera:
 
 
 if __name__ == "__main__":
-    cam = OrbbecCamera("test", False)
-    cam.set_up("CH8G65200Z9")
+    cam = OrbbecCamera("test", True)
+    cam.set_up("CH8XA52010Y")
 
     while True:
         try:
@@ -129,5 +125,4 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             cam.stop()    
             break
-
 

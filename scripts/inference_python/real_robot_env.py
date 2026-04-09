@@ -6,42 +6,61 @@ import time
 from typing import Union
 from robot.imeta_y1 import Y1Controller
 from camera.orbbec_camera import OrbbecCamera
+from camera.v4l2_camera import V4l2Camera
 
 # setting your camera serial number
-CAMERA_SERIALS = {
+Orbbec_CAMERA_SERIALS = {
     # Replace with actual serial number
     'cam_high': 'CH8R554001M',
     'cam_left_wrist': 'CH8G65200Z9',
     'cam_right_wrist': 'CH8G65200Y4',
 }
 
+V4l2_CAMERA_DEV = {
+    "cam_high": "/dev/cam_high",
+    "cam_left_wrist": "/dev/cam_left_wrist",
+    "cam_right_wrist": "/dev/cam_right_wrist",
+}
+
+# fix can id 
+ARM_CAN_DEV = {
+    "left_arm": "can0",
+    "right_arm": "can1",
+}
+
+
 class RealRobotEnv:
-    def __init__(self, single_arm: bool, cam_names: list):
+    def __init__(self, single_arm: bool, cam_names: list, visual: bool = False, camera_type: str = "v4l2"):
         self.single_arm = single_arm
         self.camera_names = cam_names
+        self.camera_type = camera_type
 
+        arm_names = ["right_arm"] if self.single_arm else ["left_arm", "right_arm"]
         self.controllers = {
-            "arm":{
-                # "left_arm": Y1Controller("left_arm"),
-                "right_arm": Y1Controller("right_arm"),
-            }
+            "arm": {arm_name: Y1Controller(arm_name) for arm_name in arm_names}
         }
 
+        if self.camera_type == "orbbec":
+            camera_cls = OrbbecCamera
+            self.camera_devices = Orbbec_CAMERA_SERIALS
+        elif self.camera_type == "v4l2":
+            camera_cls = V4l2Camera
+            self.camera_devices = V4l2_CAMERA_DEV
+        else:
+            raise ValueError(f"Unsupported camera_type: {self.camera_type}")
+
         self.cameras = {
-            "images": {
-                "cam_high": OrbbecCamera("cam_high"),
-                # "cam_left_wrist": OrbbecCamera("cam_left_wrist"),
-                "cam_right_wrist": OrbbecCamera("cam_right_wrist"),
-            },
+            "images": {cam_name: camera_cls(cam_name, visual=visual) for cam_name in self.camera_names}
         }
         
     def set_up(self, teleop=False):
-        # self.controllers["arm"]["left_arm"].set_up("can0", teleop=teleop)
-        self.controllers["arm"]["right_arm"].set_up("can1", teleop=teleop)
+        for arm_name, controller in self.controllers["arm"].items():
+            controller.set_up(ARM_CAN_DEV[arm_name], teleop=teleop)
 
-        self.cameras["images"]["cam_high"].set_up(CAMERA_SERIALS['cam_high'])
-        # self.sensors["images"]["cam_left_wrist"].set_up(CAMERA_SERIALS['cam_left_wrist'])
-        self.cameras["images"]["cam_right_wrist"].set_up(CAMERA_SERIALS['cam_right_wrist'])
+        for cam_name, camera in self.cameras["images"].items():
+            if cam_name not in self.camera_devices:
+                raise RuntimeError(f"Not find device config for camera {cam_name}!")
+            camera.set_up(self.camera_devices[cam_name])
         
         print("set up success!")
     
@@ -105,6 +124,7 @@ class RealRobotEnv:
             right_arm_controller = self.controllers["arm"]["right_arm"]
             right_arm_controller.set_joint_position(action[0:6])
             right_arm_controller.set_gripper(action[6])
+            # right_arm_controller.set_joint_position_control(action[0:7])
 
         else:
             assert len(action) >= 14
@@ -120,12 +140,10 @@ class RealRobotEnv:
             right_arm_controller.set_gripper(action[13])
 
 if __name__ == "__main__":
-    env = RealRobotEnv(single_arm=True, cam_names=["cam_high", "cam_right_wrist"])
+    env = RealRobotEnv(single_arm=False, cam_names=["cam_high", "cam_right_wrist", "cam_left_wrist"], visual=True)
     env.set_up()
 
     while True:
-      obs = env.get_observation()
-      print(f"observation : {obs}")
-      time.sleep(1.0 / 30)
-
-      
+        obs = env.get_observation()
+        print(f"observation : {obs}")
+        time.sleep(1.0 / 30)

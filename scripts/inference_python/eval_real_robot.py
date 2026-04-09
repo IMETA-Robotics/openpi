@@ -5,6 +5,7 @@ import dataclasses
 import logging
 import time
 import tyro
+import numpy as np
 from pprint import pformat
 from dataclasses import asdict
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
@@ -63,7 +64,7 @@ def eval_policy(
     print(f"cam_names: {cam_names}")
 
     # real robot environment
-    env = RealRobotEnv(single_arm, cam_names)
+    env = RealRobotEnv(single_arm, cam_names, visual=True)
     env.set_up()
 
     # language
@@ -79,6 +80,7 @@ def eval_policy(
 
     input("Press key [enter] to start model inference: ")
 
+    interpolation = True
     while True:
         try:
             observation = env.get_observation()
@@ -94,11 +96,21 @@ def eval_policy(
             print(f"model inference time: {(time.time() - start_time) * 1000} ms")
 
             action_chunk = action_chunk[:30]  # 取前30个chunk
-            print("action_chunk shape: ", action_chunk.shape)
-            for action in action_chunk:
-                env.step(action[:30])
-                time.sleep(1/30)
 
+            if interpolation:
+                current_state = observation["state"]
+                for action in action_chunk:
+                    action_result = np.linspace(current_state, action[:len(current_state)], 10)
+                    for ac in action_result:
+                        env.step(ac)
+                        time.sleep(1/300)
+                    current_state = action
+            else:
+                for action in action_chunk:
+                    env.step(action)
+                    time.sleep(1/30)
+            # input("Press key [enter] to continue model inference: ")
+            
         except KeyboardInterrupt:
             print("KeyboardInterrupt")
             break
