@@ -37,9 +37,18 @@ class Args:
     # Record the policy's behavior for debugging.
     record: bool = False
 
+    # Show camera preview windows during inference. Disable this on headless/remote terminals.
+    visual: bool = False
+
+    # Preview refresh rate. Independent from policy inference rate.
+    visual_fps: float = 30.0
+
 def eval_policy(
     policy,
     dataset: LeRobotDataset,
+    *,
+    visual: bool = False,
+    visual_fps: float = 30.0,
 ):
     # init pose
     start_idx = dataset.episode_data_index["from"][9].item()
@@ -64,7 +73,7 @@ def eval_policy(
     print(f"cam_names: {cam_names}")
 
     # real robot environment
-    env = RealRobotEnv(single_arm, cam_names, visual=True)
+    env = RealRobotEnv(single_arm, cam_names, visual=visual, visual_fps=visual_fps)
     env.set_up()
 
     # language
@@ -81,8 +90,8 @@ def eval_policy(
     input("Press key [enter] to start model inference: ")
 
     interpolation = True
-    while True:
-        try:
+    try:
+        while True:
             observation = env.get_observation()
             # wait input data
             if observation is None:
@@ -111,9 +120,10 @@ def eval_policy(
                     time.sleep(1/30)
             # input("Press key [enter] to continue model inference: ")
             
-        except KeyboardInterrupt:
-            print("KeyboardInterrupt")
-            break
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt")
+    finally:
+        env.stop()
 
 def main(args: Args) -> None:
     logging.info(pformat(asdict(args)))
@@ -131,7 +141,7 @@ def main(args: Args) -> None:
     # load dataset
     dataset = LeRobotDataset(repo_id = train_config.data.repo_id)
 
-    eval_policy(policy, dataset)
+    eval_policy(policy, dataset, visual=args.visual, visual_fps=args.visual_fps)
     # eval_policy(policy)
     logging.info("End of eval")
 

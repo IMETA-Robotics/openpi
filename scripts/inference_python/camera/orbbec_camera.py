@@ -13,7 +13,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 # ******************************************************************************
-import cv2
 import threading
 import time
 import numpy as np
@@ -86,27 +85,21 @@ class OrbbecCamera(BaseCamera):
         """获取最新帧"""
         with self.lock:
             return self.latest_frame
-    def get_image(self):
-        start_time = time.time()
+
+    def get_image(self, timeout: float = 2.0):
         frame = self.get_latest_frame()
-        # print(f"wait frame time :{(time.time() - start_time) * 1000}")
         if not frame:
-            # print("No frame")
             return None
-        
+
         color_frame = frame.get_color_frame()
         if not color_frame:
             raise RuntimeError("Failed to get color frame.")
-        
+
         # RGB
         width = color_frame.get_width()
         height = color_frame.get_height()
         data = np.asanyarray(color_frame.get_data()).copy()
         image = np.resize(data, (height, width, 3))
-        # print(f"image shape : {image.shape} , image dtype : {image.dtype}")
-
-        self.show_rgb_image(image)
-        
         return image
 
     def stop(self):
@@ -121,8 +114,9 @@ if __name__ == "__main__":
     while True:
         try:
             data = cam.get_image()
+            if data is not None:
+                cam.show_rgb_image(data)
             time.sleep(1.0 / 30)
         except KeyboardInterrupt:
             cam.stop()    
             break
-
