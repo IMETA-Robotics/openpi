@@ -235,11 +235,17 @@ class RealRobotEnv:
     def stop(self):
         self._visualizer_running = False
         if self._visualizer_thread is not None:
-            self._visualizer_thread.join(timeout=1.0)
+            try:
+                self._visualizer_thread.join(timeout=1.0)
+            except BaseException:
+                pass
             self._visualizer_thread = None
 
         for camera in self.cameras["images"].values():
-            camera.stop()
+            try:
+                camera.stop()
+            except BaseException:
+                pass
 
 if __name__ == "__main__":
     env = RealRobotEnv(single_arm=False, cam_names=["cam_high", "cam_right_wrist", "cam_left_wrist"], visual=True)

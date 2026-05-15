@@ -198,19 +198,22 @@ class V4l2Camera(BaseCamera):
 
         self._running = False
         if self._reader_thread is not None:
-            self._reader_thread.join(timeout=1.0)
+            try:
+                self._reader_thread.join(timeout=1.0)
+            except BaseException:
+                pass
             self._reader_thread = None
 
         try:
             buf_type = v4l2.v4l2_buf_type(v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE)
             fcntl.ioctl(self.fd, v4l2.VIDIOC_STREAMOFF, buf_type)
-        except Exception:
+        except BaseException:
             pass
 
         for mm in self.buffers:
             try:
                 mm.close()
-            except Exception:
+            except BaseException:
                 pass
         self.buffers.clear()
 

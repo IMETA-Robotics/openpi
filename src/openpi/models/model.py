@@ -4,7 +4,7 @@ import dataclasses
 import enum
 import logging
 import pathlib
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Union
 
 import augmax
 from flax import nnx
@@ -33,6 +33,8 @@ class ModelType(enum.Enum):
     PI0 = "pi0"
     PI0_FAST = "pi0_fast"
     PI05 = "pi05"
+    PI0_RTC = "pi0_rtc"
+    PI05_RTC = "pi05_rtc"
 
 
 # The model always expects these images

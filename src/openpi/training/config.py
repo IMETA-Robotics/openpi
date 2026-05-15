@@ -111,7 +111,7 @@ class ModelTransformFactory(GroupFactory):
 
     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
         match model_config.model_type:
-            case _model.ModelType.PI0:
+            case _model.ModelType.PI0 | _model.ModelType.PI0_RTC:
                 return _transforms.Group(
                     inputs=[
                         _transforms.InjectDefaultPrompt(self.default_prompt),
@@ -122,7 +122,7 @@ class ModelTransformFactory(GroupFactory):
                         _transforms.PadStatesAndActions(model_config.action_dim),
                     ],
                 )
-            case _model.ModelType.PI05:
+            case _model.ModelType.PI05 | _model.ModelType.PI05_RTC:
                 assert isinstance(model_config, pi0_config.Pi0Config)
                 return _transforms.Group(
                     inputs=[
@@ -183,7 +183,7 @@ class DataConfigFactory(abc.ABC):
             repo_id=repo_id,
             asset_id=asset_id,
             norm_stats=self._load_norm_stats(epath.Path(self.assets.assets_dir or assets_dirs), asset_id),
-            use_quantile_norm=model_config.model_type != ModelType.PI0,
+            use_quantile_norm=model_config.model_type not in (ModelType.PI0, ModelType.PI0_RTC),
         )
 
     def _load_norm_stats(self, assets_dir: epath.Path, asset_id: str | None) -> dict[str, _transforms.NormStats] | None:
@@ -590,7 +590,7 @@ _CONFIGS = [
         name="pi05_base_full_single_arm",
         model=pi0_config.Pi0Config(pi05=True),
         data=LeRobotAlohaDataConfig(
-            repo_id="openpi/pick_two_water_bottle_20251215",   # your datasets repo_id
+            repo_id="openpi/pick_up_screws",   # your datasets repo_id
             use_delta_joint_actions=False,
             adapt_to_pi=False,
             repack_transforms=_transforms.Group(
@@ -628,7 +628,6 @@ _CONFIGS = [
         model=pi0_config.Pi0Config(),
         data=LeRobotAlohaDataConfig(
             repo_id="openpi/folded_orange_towel_1122",  # your datasets repo_id
-            use_delta_joint_actions=False,
             repack_transforms=_transforms.Group(
                 inputs=[
                     _transforms.RepackTransform(
@@ -661,8 +660,76 @@ _CONFIGS = [
         name="pi05_base_full_dual_arm",
         model=pi0_config.Pi0Config(pi05=True),
         data=LeRobotAlohaDataConfig(
-            repo_id="openpi/pick_up_oranges_and_place_to_plates",   # your datasets repo_id
-            use_delta_joint_actions=False,
+            repo_id="openpi/bi_y1_test_20260410",   # your datasets repo_id
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                prompt_from_task=True,  # Set to True for prompt by task_name
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        num_train_steps=30000,
+        save_interval = 5000,
+        keep_period = 10000,
+        batch_size=32,  # the total batch_size not pre_gpu batch_size
+        fsdp_devices=1,
+    ),
+
+    ### RTC inference
+    # pi05 RTC inference
+    TrainConfig(
+        name="pi05_rtc_inference_dual_arm",
+        model=pi0_config.Pi0RTCConfig(pi05=True),
+        data=LeRobotAlohaDataConfig(
+            repo_id="openpi/bi_y1_test_20260410",   # your datasets repo_id
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                prompt_from_task=True,  # Set to True for prompt by task_name
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        num_train_steps=30000,
+        save_interval = 5000,
+        keep_period = 10000,
+        batch_size=32,  # the total batch_size not pre_gpu batch_size
+        fsdp_devices=1,
+    ),
+
+    # pi0 RTC inference
+    TrainConfig(
+        name="pi0_rtc_inference_dual_arm",
+        model=pi0_config.Pi0RTCConfig(pi05=True),
+        data=LeRobotAlohaDataConfig(
+            repo_id="openpi/bi_y1_test_20260410",   # your datasets repo_id
             repack_transforms=_transforms.Group(
                 inputs=[
                     _transforms.RepackTransform(
